@@ -1,0 +1,67 @@
+pipeline {
+    agent any
+    
+    environment {
+        ARTIFACTORY_URL = 'https://your-artifactory-url'
+        ARTIFACTORY_CREDENTIALS = credentials('artifactory-credentials')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh './gradlew clean build'
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                sh './gradlew test'
+            }
+        }
+        
+        stage('Package') {
+            steps {
+                sh './gradlew jar'
+            }
+        }
+        
+        stage('Publish to Artifactory') {
+            steps {
+                script {
+                    def buildInfo = Artifactory.newBuildInfo()
+                    buildInfo.name = env.JOB_NAME
+                    buildInfo.number = env.BUILD_NUMBER
+                    
+                    def uploadSpec = """{
+                        "files": [
+                            {
+                                "pattern": "**/build/libs/*.jar",
+                                "target": "libs-snapshot-local"
+                            }
+                        ]
+                    }"""
+                    
+                    server.publishBuildInfo(buildInfo)
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+} 
